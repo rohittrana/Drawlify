@@ -41,22 +41,17 @@ const CanvasPage = () => {
   const transformerRef = useRef<Konva.Transformer>(null)
   const isDrawing = useRef(false)
   const currentShapeId = useRef<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const [boardTitle, setBoardTitle] = useState('Untitled Board')
   const [saving, setSaving] = useState(false)
+  const [textInput, setTextInput] = useState('')
+  const [textPosition, setTextPosition] = useState<{ x: number; y: number } | null>(null)
   const [stageSize, setStageSize] = useState({
     width: window.innerWidth,
     height: window.innerHeight
   })
-  // Auto save every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (shapes.length > 0) {
-        saveBoard()
-      }
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [shapes, boardTitle])
+
   // Load board
   useEffect(() => {
     const loadBoard = async () => {
@@ -113,6 +108,14 @@ const CanvasPage = () => {
     }
   }, [selectedId, shapes])
 
+  // Auto save every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (shapes.length > 0) saveBoard()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [shapes, boardTitle])
+
   // Save board
   const saveBoard = async () => {
     setSaving(true)
@@ -123,6 +126,37 @@ const CanvasPage = () => {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Export PNG
+  const exportAsPNG = () => {
+    const stage = stageRef.current
+    if (!stage) return
+    const dataURL = stage.toDataURL({ pixelRatio: 2 })
+    const link = document.createElement('a')
+    link.download = `${boardTitle}.png`
+    link.href = dataURL
+    link.click()
+  }
+
+  // Submit inline text
+  const submitText = () => {
+    if (textInput.trim() && textPosition) {
+      const newId = uuidv4()
+      addShape({
+        id: newId,
+        type: 'text',
+        x: textPosition.x,
+        y: textPosition.y,
+        text: textInput.trim(),
+        fill: 'transparent',
+        stroke: strokeColor,
+        strokeWidth: 1,
+        opacity: 1
+      })
+    }
+    setTextPosition(null)
+    setTextInput('')
   }
 
   // Mouse down
@@ -165,12 +199,12 @@ const CanvasPage = () => {
       } else if (tool === 'pen') {
         addShape({ ...baseShape, points: [pos.x, pos.y] })
       } else if (tool === 'text') {
-        const text = prompt('Enter text:')
-        if (text) {
-          addShape({ ...baseShape, text, width: 200, height: 40 })
-        }
+        // Show inline textarea at exact click position
+        setTextPosition({ x: pos.x, y: pos.y })
+        setTextInput('')
         isDrawing.current = false
         currentShapeId.current = null
+        setTimeout(() => textareaRef.current?.focus(), 50)
       }
     },
     [tool, fillColor, strokeColor, strokeWidth]
@@ -329,6 +363,7 @@ const CanvasPage = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+
       {/* Top bar */}
       <div style={styles.topBar}>
         <div style={styles.topLeft}>
@@ -351,6 +386,9 @@ const CanvasPage = () => {
           <span style={styles.hint}>
             Del: delete • Ctrl+Z: undo • Ctrl+Y: redo
           </span>
+          <button onClick={exportAsPNG} style={styles.exportBtn}>
+            📥 PNG
+          </button>
           <button
             onClick={saveBoard}
             disabled={saving}
@@ -360,6 +398,46 @@ const CanvasPage = () => {
           </button>
         </div>
       </div>
+
+      {/* Inline text input — appears where user clicked */}
+      {textPosition && (
+        <textarea
+          ref={textareaRef}
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              submitText()
+            }
+            if (e.key === 'Escape') {
+              setTextPosition(null)
+              setTextInput('')
+            }
+          }}
+          onBlur={submitText}
+          placeholder="Type here... (Enter to confirm)"
+          style={{
+            position: 'fixed',
+            left: textPosition.x,
+            top: textPosition.y,
+            minWidth: '150px',
+            minHeight: '36px',
+            background: 'rgba(255,255,255,0.95)',
+            border: '1.5px dashed #4f46e5',
+            borderRadius: '4px',
+            outline: 'none',
+            fontSize: '18px',
+            fontFamily: 'sans-serif',
+            color: strokeColor,
+            resize: 'both',
+            padding: '4px 8px',
+            zIndex: 999,
+            lineHeight: '1.4',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}
+        />
+      )}
 
       {/* Toolbar */}
       <Toolbar />
@@ -375,8 +453,8 @@ const CanvasPage = () => {
             tool === 'select'
               ? 'default'
               : tool === 'eraser'
-                ? 'cell'
-                : 'crosshair'
+              ? 'cell'
+              : 'crosshair'
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -427,7 +505,7 @@ const styles: Record<string, React.CSSProperties> = {
   topRight: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
+    gap: '8px',
     minWidth: '100px',
     justifyContent: 'flex-end'
   },
@@ -456,6 +534,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
     color: '#aaa',
     whiteSpace: 'nowrap'
+  },
+  exportBtn: {
+    padding: '8px 14px',
+    backgroundColor: '#10b981',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600'
   },
   saveBtn: {
     padding: '8px 18px',
