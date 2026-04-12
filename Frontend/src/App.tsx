@@ -4,7 +4,10 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import CanvasPage from './pages/CanvasPage'
 import ProtectedRoute from './components/ProtectedRoute'
+import NotFoundPage from './pages/NotFoundPage'
 
+// Add this route at the bottom inside Routes
+<Route path="*" element={<NotFoundPage />} />
 function App() {
   return (
     <BrowserRouter>
