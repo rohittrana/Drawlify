@@ -17,6 +17,7 @@ import { Shape, ShapeType } from '../types/canvas'
 import Toolbar from '../components/canvas/Toolbar'
 import api from '../api/axios'
 
+
 const CanvasPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
