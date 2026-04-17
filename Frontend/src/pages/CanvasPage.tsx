@@ -16,8 +16,7 @@ import { useCanvasStore } from '../store/canvasStore'
 import { Shape, ShapeType } from '../types/canvas'
 import Toolbar from '../components/canvas/Toolbar'
 import api from '../api/axios'
-
-
+import PropertiesPanel from '../components/canvas/PropertiesPanel'
 const CanvasPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -43,11 +42,15 @@ const CanvasPage = () => {
   const isDrawing = useRef(false)
   const currentShapeId = useRef<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isPanning = useRef(false)
+  const lastPointerPosition = useRef({ x: 0, y: 0 })
 
   const [boardTitle, setBoardTitle] = useState('Untitled Board')
   const [saving, setSaving] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [textPosition, setTextPosition] = useState<{ x: number; y: number } | null>(null)
+  const [scale, setScale] = useState(1)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
   const [stageSize, setStageSize] = useState({
     width: window.innerWidth,
     height: window.innerHeight
@@ -81,6 +84,44 @@ const CanvasPage = () => {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Zoom with Ctrl + Scroll
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+
+      const scaleBy = 1.08
+      const stage = stageRef.current
+      if (!stage) return
+
+      const oldScale = scale
+      const pointer = stage.getPointerPosition()
+      if (!pointer) return
+
+      const mousePointTo = {
+        x: (pointer.x - position.x) / oldScale,
+        y: (pointer.y - position.y) / oldScale
+      }
+
+      const newScale =
+        e.deltaY < 0
+          ? Math.min(oldScale * scaleBy, 5)
+          : Math.max(oldScale / scaleBy, 0.1)
+
+      const newPos = {
+        x: pointer.x - mousePointTo.x * newScale,
+        y: pointer.y - mousePointTo.y * newScale
+      }
+
+      setScale(newScale)
+      setPosition(newPos)
+    }
+
+    const container = document.querySelector('canvas')
+    container?.addEventListener('wheel', handleWheel, { passive: false })
+    return () => container?.removeEventListener('wheel', handleWheel)
+  }, [scale, position])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -88,10 +129,14 @@ const CanvasPage = () => {
       if (e.ctrlKey && e.key === 'y') redo()
       if (e.key === 'Delete' && selectedId) deleteShape(selectedId)
       if (e.key === 'Escape') setSelectedId(null)
+      if (e.ctrlKey && e.key === '=') { e.preventDefault(); zoomIn() }
+      if (e.ctrlKey && e.key === '-') { e.preventDefault(); zoomOut() }
+      if (e.ctrlKey && e.key === '0') { e.preventDefault(); resetZoom() }
+      if (e.ctrlKey && e.key === 'f') { e.preventDefault(); fitToScreen() }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedId])
+  }, [selectedId, scale])
 
   // Transformer
   useEffect(() => {
@@ -140,6 +185,45 @@ const CanvasPage = () => {
     link.click()
   }
 
+  // Zoom controls
+  const zoomIn = () => setScale((s) => Math.min(s * 1.2, 5))
+  const zoomOut = () => setScale((s) => Math.max(s / 1.2, 0.1))
+  const resetZoom = () => {
+    setScale(1)
+    setPosition({ x: 0, y: 0 })
+  }
+
+  const fitToScreen = () => {
+    if (shapes.length === 0) return
+
+    let minX = Infinity, minY = Infinity
+    let maxX = -Infinity, maxY = -Infinity
+
+    shapes.forEach((shape) => {
+      const x = shape.x
+      const y = shape.y
+      const w = shape.width || 100
+      const h = shape.height || 100
+      minX = Math.min(minX, x)
+      minY = Math.min(minY, y)
+      maxX = Math.max(maxX, x + w)
+      maxY = Math.max(maxY, y + h)
+    })
+
+    const padding = 80
+    const contentWidth = maxX - minX + padding * 2
+    const contentHeight = maxY - minY + padding * 2
+    const scaleX = stageSize.width / contentWidth
+    const scaleY = stageSize.height / contentHeight
+    const newScale = Math.min(scaleX, scaleY, 1)
+
+    setScale(newScale)
+    setPosition({
+      x: (stageSize.width - contentWidth * newScale) / 2 - (minX - padding) * newScale,
+      y: (stageSize.height - contentHeight * newScale) / 2 - (minY - padding) * newScale
+    })
+  }
+
   // Submit inline text
   const submitText = () => {
     if (textInput.trim() && textPosition) {
@@ -159,7 +243,7 @@ const CanvasPage = () => {
     setTextPosition(null)
     setTextInput('')
   }
-
+<PropertiesPanel />
   // Mouse down
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -173,6 +257,12 @@ const CanvasPage = () => {
       const pos = stage.getPointerPosition()
       if (!pos) return
 
+      // Adjust for zoom and pan
+      const adjustedPos = {
+        x: (pos.x - position.x) / scale,
+        y: (pos.y - position.y) / scale
+      }
+
       isDrawing.current = true
       const newId = uuidv4()
       currentShapeId.current = newId
@@ -180,8 +270,8 @@ const CanvasPage = () => {
       const baseShape: Shape = {
         id: newId,
         type: tool as ShapeType,
-        x: pos.x,
-        y: pos.y,
+        x: adjustedPos.x,
+        y: adjustedPos.y,
         fill:
           tool === 'pen' || tool === 'line' || tool === 'arrow'
             ? 'transparent'
@@ -198,9 +288,8 @@ const CanvasPage = () => {
       } else if (tool === 'line' || tool === 'arrow') {
         addShape({ ...baseShape, points: [0, 0, 0, 0] })
       } else if (tool === 'pen') {
-        addShape({ ...baseShape, points: [pos.x, pos.y] })
+        addShape({ ...baseShape, points: [adjustedPos.x, adjustedPos.y] })
       } else if (tool === 'text') {
-        // Show inline textarea at exact click position
         setTextPosition({ x: pos.x, y: pos.y })
         setTextInput('')
         isDrawing.current = false
@@ -208,7 +297,7 @@ const CanvasPage = () => {
         setTimeout(() => textareaRef.current?.focus(), 50)
       }
     },
-    [tool, fillColor, strokeColor, strokeWidth]
+    [tool, fillColor, strokeColor, strokeWidth, position, scale]
   )
 
   // Mouse move
@@ -219,30 +308,79 @@ const CanvasPage = () => {
     const pos = stage.getPointerPosition()
     if (!pos) return
 
+    // Adjust for zoom and pan
+    const adjustedPos = {
+      x: (pos.x - position.x) / scale,
+      y: (pos.y - position.y) / scale
+    }
+
     const shapeId = currentShapeId.current
     const shape = shapes.find((s) => s.id === shapeId)
     if (!shape) return
 
     if (tool === 'rectangle' || tool === 'ellipse') {
       updateShape(shapeId, {
-        width: pos.x - shape.x,
-        height: pos.y - shape.y
+        width: adjustedPos.x - shape.x,
+        height: adjustedPos.y - shape.y
       })
     } else if (tool === 'line' || tool === 'arrow') {
       updateShape(shapeId, {
-        points: [0, 0, pos.x - shape.x, pos.y - shape.y]
+        points: [0, 0, adjustedPos.x - shape.x, adjustedPos.y - shape.y]
       })
     } else if (tool === 'pen') {
       const existing = shape.points || []
-      updateShape(shapeId, { points: [...existing, pos.x, pos.y] })
+      updateShape(shapeId, {
+        points: [...existing, adjustedPos.x, adjustedPos.y]
+      })
     }
-  }, [tool, shapes])
+  }, [tool, shapes, position, scale])
 
   // Mouse up
   const handleMouseUp = useCallback(() => {
     isDrawing.current = false
     currentShapeId.current = null
   }, [])
+
+  // Stage mouse down — handles pan + draw
+  const handleStageMouseDown = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (e.evt.button === 1) {
+        isPanning.current = true
+        lastPointerPosition.current = { x: e.evt.clientX, y: e.evt.clientY }
+        e.evt.preventDefault()
+        return
+      }
+      handleMouseDown(e)
+    },
+    [handleMouseDown]
+  )
+
+  // Stage mouse move — handles pan + draw
+  const handleStageMouseMove = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (isPanning.current) {
+        const dx = e.evt.clientX - lastPointerPosition.current.x
+        const dy = e.evt.clientY - lastPointerPosition.current.y
+        setPosition((prev) => ({ x: prev.x + dx, y: prev.y + dy }))
+        lastPointerPosition.current = { x: e.evt.clientX, y: e.evt.clientY }
+        return
+      }
+      handleMouseMove()
+    },
+    [handleMouseMove]
+  )
+
+  // Stage mouse up — handles pan + draw
+  const handleStageMouseUp = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (isPanning.current) {
+        isPanning.current = false
+        return
+      }
+      handleMouseUp()
+    },
+    [handleMouseUp]
+  )
 
   // Render shapes
   const renderShape = (shape: Shape) => {
@@ -352,7 +490,7 @@ const CanvasPage = () => {
             x={shape.x}
             y={shape.y}
             text={shape.text || ''}
-            fontSize={18}
+            fontSize={shape.fontSize || 18}
             fill={shape.stroke}
             rotation={shape.rotation || 0}
           />
@@ -385,7 +523,7 @@ const CanvasPage = () => {
         </div>
         <div style={styles.topRight}>
           <span style={styles.hint}>
-            Del: delete • Ctrl+Z: undo • Ctrl+Y: redo
+            Del • Ctrl+Z • Ctrl+Y • Ctrl+Scroll zoom
           </span>
           <button onClick={exportAsPNG} style={styles.exportBtn}>
             📥 PNG
@@ -400,7 +538,7 @@ const CanvasPage = () => {
         </div>
       </div>
 
-      {/* Inline text input — appears where user clicked */}
+      {/* Inline text input */}
       {textPosition && (
         <textarea
           ref={textareaRef}
@@ -448,18 +586,23 @@ const CanvasPage = () => {
         ref={stageRef}
         width={stageSize.width}
         height={stageSize.height}
+        scaleX={scale}
+        scaleY={scale}
+        x={position.x}
+        y={position.y}
         style={{
           backgroundColor: '#fafafa',
-          cursor:
-            tool === 'select'
+          cursor: isPanning.current
+            ? 'grabbing'
+            : tool === 'select'
               ? 'default'
               : tool === 'eraser'
-              ? 'cell'
-              : 'crosshair'
+                ? 'cell'
+                : 'crosshair'
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
       >
         <Layer>
           {shapes.map((shape: Shape) => renderShape(shape))}
@@ -472,6 +615,31 @@ const CanvasPage = () => {
           />
         </Layer>
       </Stage>
+
+      {/* Bottom zoom bar */}
+      <div style={styles.bottomBar}>
+        <button onClick={zoomOut} style={styles.zoomBtn} title="Zoom out">
+          −
+        </button>
+        <span
+          onClick={resetZoom}
+          style={styles.zoomLevel}
+          title="Click to reset zoom"
+        >
+          {Math.round(scale * 100)}%
+        </span>
+        <button onClick={zoomIn} style={styles.zoomBtn} title="Zoom in">
+          +
+        </button>
+        <div style={styles.zoomDivider} />
+        <button onClick={fitToScreen} style={styles.fitBtn} title="Fit to screen">
+          ⊡ Fit
+        </button>
+        <button onClick={resetZoom} style={styles.fitBtn} title="Reset view">
+          ↺ Reset
+        </button>
+      </div>
+
     </div>
   )
 }
@@ -556,6 +724,61 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     fontWeight: '600',
     whiteSpace: 'nowrap'
+  },
+  bottomBar: {
+    position: 'fixed',
+    bottom: '16px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    backgroundColor: '#fff',
+    borderRadius: '10px',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+    padding: '6px 12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    zIndex: 100
+  },
+  zoomBtn: {
+    width: '32px',
+    height: '32px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '18px',
+    fontWeight: '700',
+    backgroundColor: 'transparent',
+    color: '#333',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  zoomLevel: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#333',
+    minWidth: '48px',
+    textAlign: 'center' as const,
+    cursor: 'pointer',
+    padding: '4px 8px',
+    borderRadius: '6px',
+    userSelect: 'none' as const
+  },
+  zoomDivider: {
+    width: '1px',
+    height: '20px',
+    backgroundColor: '#eee',
+    margin: '0 4px'
+  },
+  fitBtn: {
+    padding: '6px 10px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '500',
+    backgroundColor: 'transparent',
+    color: '#555'
   }
 }
 

@@ -30,4 +30,6 @@ export interface Shape {
   strokeWidth: number
   opacity: number
   rotation?: number
+  fontSize?: number
+  fontFamily?: string
 }
