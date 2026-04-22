@@ -16,6 +16,7 @@ import { useCanvasStore } from '../store/canvasStore'
 import { Shape, ShapeType } from '../types/canvas'
 import Toolbar from '../components/canvas/Toolbar'
 import api from '../api/axios'
+import { useTheme } from '../hooks/useTheme'
 import PropertiesPanel from '../components/canvas/PropertiesPanel'
 const CanvasPage = () => {
   const { id } = useParams()
@@ -37,14 +38,14 @@ const CanvasPage = () => {
     redo
   } = useCanvasStore()
 
-  const stageRef = useRef<Konva.Stage>(null)
+  const stwageRef = useRef<Konva.Stage>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
   const isDrawing = useRef(false)
   const currentShapeId = useRef<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isPanning = useRef(false)
   const lastPointerPosition = useRef({ x: 0, y: 0 })
-
+const { isDark, toggleTheme } = useTheme()
   const [boardTitle, setBoardTitle] = useState('Untitled Board')
   const [saving, setSaving] = useState(false)
   const [textInput, setTextInput] = useState('')
@@ -91,11 +92,11 @@ const CanvasPage = () => {
       e.preventDefault()
 
       const scaleBy = 1.08
-      const stage = stageRef.current
-      if (!stage) return
+      const stageRef = useRef<Konva.Stage>(null)
+      if (!stageRef.current) return
 
       const oldScale = scale
-      const pointer = stage.getPointerPosition()
+      const pointer = stageRef.current.getPointerPosition()
       if (!pointer) return
 
       const mousePointTo = {
@@ -140,8 +141,8 @@ const CanvasPage = () => {
 
   // Transformer
   useEffect(() => {
-    if (!transformerRef.current || !stageRef.current) return
-    const stage = stageRef.current
+    if (!transformerRef.current || !stwageRef.current) return
+    const stage = stwageRef.current
     if (selectedId) {
       const node = stage.findOne(`#${selectedId}`)
       if (node) {
@@ -176,7 +177,7 @@ const CanvasPage = () => {
 
   // Export PNG
   const exportAsPNG = () => {
-    const stage = stageRef.current
+    const stage = stwageRef.current
     if (!stage) return
     const dataURL = stage.toDataURL({ pixelRatio: 2 })
     const link = document.createElement('a')
@@ -252,7 +253,7 @@ const CanvasPage = () => {
         return
       }
 
-      const stage = stageRef.current
+      const stage = stwageRef.current
       if (!stage) return
       const pos = stage.getPointerPosition()
       if (!pos) return
@@ -303,7 +304,7 @@ const CanvasPage = () => {
   // Mouse move
   const handleMouseMove = useCallback(() => {
     if (!isDrawing.current || !currentShapeId.current) return
-    const stage = stageRef.current
+    const stage = stwageRef.current
     if (!stage) return
     const pos = stage.getPointerPosition()
     if (!pos) return
@@ -583,7 +584,7 @@ const CanvasPage = () => {
 
       {/* Canvas */}
       <Stage
-        ref={stageRef}
+        ref={stwageRef}
         width={stageSize.width}
         height={stageSize.height}
         scaleX={scale}

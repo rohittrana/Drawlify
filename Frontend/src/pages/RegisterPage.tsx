@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import api from '../api/axios'
-
+import { toast } from '../store/toastStore'
 const RegisterPage = () => {
   const navigate = useNavigate()
   const { setAuth } = useAuthStore()
@@ -15,22 +15,23 @@ const RegisterPage = () => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    try {
-      const res = await api.post('/auth/register', form)
-      setAuth(res.data.user, res.data.accessToken)
-      navigate('/dashboard')
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed')
-    } finally {
-      setLoading(false)
-    }
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setError('')
+  setLoading(true)
+  try {
+    const res = await api.post('/auth/register', form)
+    setAuth(res.data.user, res.data.accessToken)
+    toast.success(`Welcome to Drawlify, ${res.data.user.name}!`)
+    navigate('/dashboard')
+  } catch (err: any) {
+    const msg = err.response?.data?.message || 'Registration failed'
+    setError(msg)
+    toast.error(msg)
+  } finally {
+    setLoading(false)
   }
-
+}
   return (
     <div style={styles.container}>
       <div style={styles.card}>

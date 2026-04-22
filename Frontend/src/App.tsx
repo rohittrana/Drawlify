@@ -5,7 +5,7 @@ import DashboardPage from './pages/DashboardPage'
 import CanvasPage from './pages/CanvasPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import NotFoundPage from './pages/NotFoundPage'
-
+import Toast from './components/Toast'
 // Add this route at the bottom inside Routes
 <Route path="*" element={<NotFoundPage />} />
 function App() {
@@ -32,6 +32,7 @@ function App() {
         />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+        <Toast />
     </BrowserRouter>
   )
 }
