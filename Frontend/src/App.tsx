@@ -6,6 +6,8 @@ import CanvasPage from './pages/CanvasPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import NotFoundPage from './pages/NotFoundPage'
 import Toast from './components/Toast'
+import ProfilePage from './pages/ProfilePage'
+
 // Add this route at the bottom inside Routes
 <Route path="*" element={<NotFoundPage />} />
 function App() {
@@ -19,6 +21,7 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+                <ProfilePage />
             </ProtectedRoute>
           }
         />

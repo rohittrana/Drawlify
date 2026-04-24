@@ -119,3 +119,51 @@ export const refreshToken = async (req: Request, res: Response) => {
     res.status(401).json({ message: 'Invalid refresh token' })
   }
 }
+// UPDATE PROFILE
+export const updateProfile = async (req: any, res: Response) => {
+  try {
+    const { name, currentPassword, newPassword } = req.body
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId }
+    })
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    // If changing password
+    if (currentPassword && newPassword) {
+      const isValid = await bcrypt.compare(currentPassword, user.password)
+      if (!isValid) {
+        return res.status(400).json({ message: 'Current password is incorrect' })
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: 'New password must be at least 6 characters' })
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.userId },
+      data: {
+        ...(name && { name }),
+        ...(currentPassword && newPassword && {
+          password: await bcrypt.hash(newPassword, 12)
+        })
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true
+      }
+    })
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: updatedUser
+    })
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error' })
+  }
+}

@@ -233,6 +233,19 @@ const DashboardPage = () => {
                 >
                   🗑️
                 </button>
+                <button
+                  onClick={() => navigate('/profile')}
+                  style={{
+                    ...styles.iconBtn,
+                    backgroundColor: isDark ? '#2d2d4e' : '#f0f0f0',
+                    color: text,
+                    fontWeight: '700',
+                    fontSize: '14px'
+                  }}
+                  title="Profile settings"
+                >
+                  {user?.name?.charAt(0).toUpperCase()}
+                </button>
               </div>
             ))}
           </div>
