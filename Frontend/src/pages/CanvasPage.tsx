@@ -18,6 +18,8 @@ import Toolbar from '../components/canvas/Toolbar'
 import api from '../api/axios'
 import { useTheme } from '../hooks/useTheme'
 import PropertiesPanel from '../components/canvas/PropertiesPanel'
+import GridLayer from '../components/canvas/GridLayer'
+import GridControls from '../components/canvas/GridControls'
 const CanvasPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -35,9 +37,15 @@ const CanvasPage = () => {
     setSelectedId,
     setShapes,
     undo,
-    redo
+    redo,
+    snapToGrid,
+    gridSize
   } = useCanvasStore()
-
+  // Snap position to grid
+  const snapToGridFn = (value: number): number => {
+    if (!snapToGrid) return value
+    return Math.round(value / gridSize) * gridSize
+  }
   const stwageRef = useRef<Konva.Stage>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
   const isDrawing = useRef(false)
@@ -45,7 +53,7 @@ const CanvasPage = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isPanning = useRef(false)
   const lastPointerPosition = useRef({ x: 0, y: 0 })
-const { isDark, toggleTheme } = useTheme()
+  const { isDark, toggleTheme } = useTheme()
   const [boardTitle, setBoardTitle] = useState('Untitled Board')
   const [saving, setSaving] = useState(false)
   const [textInput, setTextInput] = useState('')
@@ -244,7 +252,7 @@ const { isDark, toggleTheme } = useTheme()
     setTextPosition(null)
     setTextInput('')
   }
-<PropertiesPanel />
+  <PropertiesPanel />
   // Mouse down
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -258,12 +266,11 @@ const { isDark, toggleTheme } = useTheme()
       const pos = stage.getPointerPosition()
       if (!pos) return
 
-      // Adjust for zoom and pan
+      // AFTER
       const adjustedPos = {
-        x: (pos.x - position.x) / scale,
-        y: (pos.y - position.y) / scale
+        x: snapToGridFn((pos.x - position.x) / scale),
+        y: snapToGridFn((pos.y - position.y) / scale)
       }
-
       isDrawing.current = true
       const newId = uuidv4()
       currentShapeId.current = newId

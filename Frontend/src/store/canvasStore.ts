@@ -10,6 +10,13 @@ interface CanvasStore {
   strokeWidth: number
   history: Shape[][]
   historyIndex: number
+
+  // Grid
+  showGrid: boolean
+  snapToGrid: boolean
+  gridSize: number
+
+  // Actions
   setTool: (tool: Tool) => void
   setFillColor: (color: string) => void
   setStrokeColor: (color: string) => void
@@ -23,6 +30,11 @@ interface CanvasStore {
   saveHistory: () => void
   undo: () => void
   redo: () => void
+
+  // Grid actions
+  toggleGrid: () => void
+  toggleSnapToGrid: () => void
+  setGridSize: (size: number) => void
 }
 
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
@@ -35,12 +47,23 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   history: [[]],
   historyIndex: 0,
 
+  // Grid defaults
+  showGrid: false,
+  snapToGrid: false,
+  gridSize: 20,
+
+  // Tool actions
   setTool: (tool) => set({ tool, selectedId: null }),
   setFillColor: (fillColor) => set({ fillColor }),
   setStrokeColor: (strokeColor) => set({ strokeColor }),
   setStrokeWidth: (strokeWidth) => set({ strokeWidth }),
   setSelectedId: (selectedId) => set({ selectedId }),
   setShapes: (shapes) => set({ shapes }),
+
+  // Grid actions
+  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
+  toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
+  setGridSize: (gridSize) => set({ gridSize }),
 
   saveHistory: () => {
     const { shapes, history, historyIndex } = get()
